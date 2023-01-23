@@ -12,13 +12,18 @@
 
 void apply_kernelsu_rules()
 {
+#ifdef HAVE_SELINUX_STATE
 	struct policydb *db;
+#else
+#define db (&policydb)
+#endif
 
 	if (!getenforce()) {
 		pr_info("SELinux permissive or disabled, don't apply rules.");
 		return;
 	}
 
+#ifdef HAVE_SELINUX_STATE
 	rcu_read_lock();
 #ifdef SELINUX_POLICY_INSTEAD_SELINUX_SS
 	struct selinux_policy *policy = rcu_dereference(selinux_state.policy);
@@ -26,6 +31,7 @@ void apply_kernelsu_rules()
 #else
 	struct selinux_ss *ss = rcu_dereference(selinux_state.ss);
 	db = &ss->policydb;
+#endif
 #endif
 
 	ksu_permissive(db, KERNEL_SU_DOMAIN);
@@ -104,5 +110,7 @@ void apply_kernelsu_rules()
 	ksu_allow(db, "system_server", "untrusted_app_all_devpts", "chr_file",
 		  "write");
 
+#ifdef HAVE_SELINUX_STATE
 	rcu_read_unlock();
+#endif
 }
