@@ -8,6 +8,11 @@
 #define KERNEL_READ_WRITE_NEW_PROTOTYPES
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0) ||                        \
+	LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 0)
+#define FILP_OPEN_WORKS_IN_WORKER
+#endif
+
 #ifdef KERNEL_READ_WRITE_NEW_PROTOTYPES
 ssize_t kernel_read_compat(struct file *, void *, size_t, loff_t *);
 #else

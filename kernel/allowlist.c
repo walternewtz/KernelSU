@@ -26,6 +26,9 @@ static struct list_head allow_list;
 
 static struct work_struct ksu_save_work;
 static struct work_struct ksu_load_work;
+#ifndef FILP_OPEN_WORKS_IN_WORKER
+static struct file *fp;
+#endif
 
 bool persistent_allow_list(void);
 
@@ -120,11 +123,25 @@ void do_persistent_allow_list(struct work_struct *work)
 	struct list_head *pos = NULL;
 	loff_t off = 0;
 
+#ifdef FILP_OPEN_WORKS_IN_WORKER
 	struct file *fp =
 		filp_open(KERNEL_SU_ALLOWLIST, O_WRONLY | O_CREAT, 0644);
+#else
+	if (!fp) {
+		pr_err("save_allow_list fp is NULL.\n");
+		return;
+	}
+#endif
 
+#ifdef FILP_OPEN_WORKS_IN_WORKER
 	if (IS_ERR(fp)) {
 		pr_err("save_allow_list creat file failed: %d\n", PTR_ERR(fp));
+#else
+	// when reusing the previous fp, lseek is needed first
+	loff_t err = generic_file_llseek(fp, 0, SEEK_SET);
+	if (err < 0) {
+		pr_err("save_allow_list lseek failed with err %d.\n", err);
+#endif
 		return;
 	}
 
@@ -149,17 +166,24 @@ void do_persistent_allow_list(struct work_struct *work)
 	}
 
 exit:
+#ifdef FILP_OPEN_WORKS_IN_WORKER
 	filp_close(fp, 0);
+#else
+	;  // do nothing
+#endif
 }
 
 void do_load_allow_list(struct work_struct *work)
 {
 	loff_t off = 0;
 	ssize_t ret = 0;
+#ifdef FILP_OPEN_WORKS_IN_WORKER
 	struct file *fp = NULL;
+#endif
 	u32 magic;
 	u32 version;
 
+#ifdef FILP_OPEN_WORKS_IN_WORKER
 	fp = filp_open("/data/adb/", O_RDONLY, 0);
 	if (IS_ERR(fp)) {
 		int errno = PTR_ERR(fp);
@@ -193,6 +217,18 @@ void do_load_allow_list(struct work_struct *work)
 #endif
 		return;
 	}
+#else
+	if (!fp) {
+		pr_err("load_allow_list fp is NULL.\n");
+		return;
+	}
+
+	loff_t err = generic_file_llseek(fp, 0, SEEK_SET);
+	if (err < 0) {
+		pr_err("load_allow_list lseek failed with err %d.\n", err);
+		return;
+	}
+#endif /* FILP_OPEN_WORKS_IN_WORKER */
 
 	// verify magic
 	if (kernel_read_compat(fp, &magic, sizeof(magic), &off) != sizeof(magic) ||
@@ -226,7 +262,9 @@ void do_load_allow_list(struct work_struct *work)
 
 exit:
 	ksu_show_allow_list();
+#ifdef FILP_OPEN_WORKS_IN_WORKER
 	filp_close(fp, 0);
+#endif
 }
 
 void ksu_prune_allowlist(bool (*is_uid_exist)(uid_t, void *), void *data)
@@ -261,6 +299,24 @@ bool persistent_allow_list(void)
 
 bool ksu_load_allow_list(void)
 {
+#ifndef FILP_OPEN_WORKS_IN_WORKER
+	if (fp) {
+		pr_warn("ksu_load_allow_list fp is already opened.\n");
+	} else {
+		// load allowlist now!
+		fp = filp_open(KERNEL_SU_ALLOWLIST, O_RDWR | O_CREAT, 0644);
+
+		if (IS_ERR(fp)) {
+#ifdef CONFIG_KSU_DEBUG
+			ksu_allow_uid(2000, true,
+				      true); // allow adb shell by default
+#endif
+			pr_err("ksu_load_allow_list creat file failed: %d\n", PTR_ERR(fp));
+			fp = NULL;
+			return false;
+		}
+	}
+#endif /* FILP_OPEN_WORKS_IN_WORKER */
 	return ksu_queue_work(&ksu_load_work);
 }
 
@@ -286,4 +342,9 @@ void ksu_allowlist_exit(void)
 		kfree(np);
 	}
 	mutex_unlock(&allowlist_mutex);
+
+#ifndef FILP_OPEN_WORKS_IN_WORKER
+	if (fp)
+		filp_close(fp, 0);
+#endif
 }

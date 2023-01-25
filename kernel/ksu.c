@@ -54,6 +54,9 @@ int __init kernelsu_init(void)
 	ksu_uid_observer_init();
 
 #ifdef CONFIG_KPROBES
+#ifndef FILP_OPEN_WORKS_IN_WORKER
+#error("KPROBES should not be enabled for this kernel, please follow https://kernelsu.org/guide/how-to-integrate-for-non-gki.html")
+#endif
 	ksu_enable_sucompat();
 	ksu_enable_ksud();
 #else
