@@ -34,6 +34,7 @@
 #include "arch.h"
 #include "allowlist.h"
 #include "selinux/selinux.h"
+#include "fs.h"
 
 #define SU_PATH "/system/bin/su"
 #define SH_PATH "/system/bin/sh"
@@ -148,6 +149,9 @@ int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,
 	    !memcmp(filename->name, app_process, sizeof(app_process) - 1)) {
 		first_app_process = false;
 		pr_info("exec app_process, /data prepared!\n");
+#ifndef FILP_OPEN_WORKS_IN_WORKER
+		ksu_save_fs_root();
+#endif
 		ksu_load_allow_list();
 	}
 

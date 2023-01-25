@@ -125,7 +125,7 @@ void do_persistent_allow_list(struct work_struct *work)
 	loff_t off = 0;
 
 	struct file *fp =
-		filp_open(KERNEL_SU_ALLOWLIST, O_WRONLY | O_CREAT, 0644);
+		filp_open_compat(KERNEL_SU_ALLOWLIST, O_WRONLY | O_CREAT, 0644);
 
 	if (IS_ERR(fp)) {
 		pr_err("save_allow_list creat file failed: %d\n", PTR_ERR(fp));
@@ -164,7 +164,7 @@ void do_load_allow_list(struct work_struct *work)
 	u32 magic;
 	u32 version;
 
-	fp = filp_open("/data/adb/", O_RDONLY, 0);
+	fp = filp_open_compat("/data/adb/", O_RDONLY, 0);
 	if (IS_ERR(fp)) {
 		int errno = PTR_ERR(fp);
 		pr_err("load_allow_list open '/data/adb': %d\n", PTR_ERR(fp));
@@ -180,7 +180,7 @@ void do_load_allow_list(struct work_struct *work)
 	}
 
 	// load allowlist now!
-	fp = filp_open(KERNEL_SU_ALLOWLIST, O_RDONLY, 0);
+	fp = filp_open_compat(KERNEL_SU_ALLOWLIST, O_RDONLY, 0);
 
 	if (IS_ERR(fp)) {
 #ifdef CONFIG_KSU_DEBUG
